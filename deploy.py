@@ -2,17 +2,18 @@
 deploy.py — Kraken Swing Bot DigitalOcean deployment script
 
 Usage:
-    DO_TOKEN=xxx KRAKEN_API_KEY=xxx KRAKEN_API_SECRET=xxx python deploy.py
+    python deploy.py
 
-Required env vars:
-    DO_TOKEN            — DigitalOcean API token (Read + Write)
-    KRAKEN_API_KEY      — Your Kraken API key
-    KRAKEN_API_SECRET   — Your Kraken API secret
+Credentials are loaded from a local .env file (never committed to git).
+See .env.example for required variables.
 """
 
 import os
 import sys
 import time
+
+from dotenv import load_dotenv
+load_dotenv()
 import json
 import urllib.request
 import urllib.error
@@ -45,6 +46,13 @@ def get_kraken_keys() -> tuple:
     return key, secret
 
 
+def get_optional_envs() -> dict:
+    return {
+        "GITHUB_TOKEN":       os.getenv("GITHUB_TOKEN", ""),
+        "DISCORD_WEBHOOK_URL": os.getenv("DISCORD_WEBHOOK_URL", ""),
+    }
+
+
 def api_request(method: str, path: str, token: str, body: dict = None) -> dict:
     url  = f"{DO_API}{path}"
     data = json.dumps(body).encode() if body else None
@@ -73,7 +81,16 @@ def log(msg: str):
 
 # ── App spec ───────────────────────────────────────────────────────────────────
 
-def build_app_spec(kraken_key: str, kraken_secret: str) -> dict:
+def build_app_spec(kraken_key: str, kraken_secret: str, extras: dict) -> dict:
+    envs = [
+        {"key": "KRAKEN_API_KEY",    "value": kraken_key,    "type": "SECRET", "scope": "RUN_TIME"},
+        {"key": "KRAKEN_API_SECRET", "value": kraken_secret, "type": "SECRET", "scope": "RUN_TIME"},
+    ]
+
+    for key, value in extras.items():
+        if value:
+            envs.append({"key": key, "value": value, "type": "SECRET", "scope": "RUN_TIME"})
+
     return {
         "name":   APP_NAME,
         "region": REGION,
@@ -86,10 +103,7 @@ def build_app_spec(kraken_key: str, kraken_secret: str) -> dict:
                     "branch":         BRANCH,
                     "deploy_on_push": True,
                 },
-                "envs": [
-                    {"key": "KRAKEN_API_KEY",    "value": kraken_key,    "type": "SECRET", "scope": "RUN_TIME"},
-                    {"key": "KRAKEN_API_SECRET",  "value": kraken_secret, "type": "SECRET", "scope": "RUN_TIME"},
-                ],
+                "envs": envs,
             }
         ],
     }
@@ -154,7 +168,8 @@ def main():
 
     token              = get_token()
     kraken_key, kraken_secret = get_kraken_keys()
-    spec               = build_app_spec(kraken_key, kraken_secret)
+    extras             = get_optional_envs()
+    spec               = build_app_spec(kraken_key, kraken_secret, extras)
 
     existing = find_existing_app(token)
 
