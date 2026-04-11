@@ -52,7 +52,7 @@ def _push_to_github():
     if not token or not _log_buffer:
         return
 
-    repo    = "xx-r0ger-xx/kraken-swing-bot"
+    repo    = "xx-r0ger-xx-fintech/kraken-swing-bot"
     path    = f"storage/logs/{_today()}.md"
     api_url = f"https://api.github.com/repos/{repo}/contents/{path}"
 
@@ -95,7 +95,7 @@ def _send_discord():
     if not webhook_url or not _discord_lines:
         return
 
-    log_url = "https://github.com/xx-r0ger-xx/kraken-swing-bot/tree/main/storage/logs"
+    log_url = "https://github.com/xx-r0ger-xx-fintech/kraken-swing-bot/tree/main/storage/logs"
 
     body = {
         "embeds": [

@@ -21,7 +21,7 @@ import urllib.error
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 APP_NAME    = "kraken-swing-bot"
-GITHUB_REPO = "xx-r0ger-xx/kraken-swing-bot"
+GITHUB_REPO = "xx-r0ger-xx-fintech/kraken-swing-bot"
 BRANCH      = "main"
 RUN_COMMAND = "python -m app.main"
 REGION      = "nyc"
