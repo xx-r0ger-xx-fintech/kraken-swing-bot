@@ -1,0 +1,7 @@
+krakenex
+pykrakenapi
+pandas
+numpy
+pytz
+python-dotenv
+requests
