@@ -1,5 +1,4 @@
 krakenex
-pykrakenapi
 pandas
 numpy
 pytz
