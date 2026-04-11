@@ -94,10 +94,23 @@ kraken-swing-bot/
 
 ---
 
-## Deployment (DigitalOcean App Platform)
+## Deployment
 
-1. Push repo to GitHub
-2. Connect to DO App Platform as a **Worker**
-3. Set run command: `python -m app.main`
-4. Add environment variables above
+### Automated (recommended)
+
+1. Copy `.env.example` to `.env` and fill in your credentials
+2. Run:
+
+```bash
+python deploy.py
+```
+
+The script creates the DO app, sets all secrets, and tails the deployment automatically.
+
+### Manual (DigitalOcean App Platform)
+
+1. Connect this repo to DigitalOcean App Platform
+2. Set component type to **Worker**
+3. Set run command to `python -m app.main`
+4. Add environment variables (see below)
 5. Deploy
