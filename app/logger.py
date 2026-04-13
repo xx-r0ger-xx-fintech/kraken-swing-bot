@@ -3,14 +3,30 @@ import json
 import base64
 import urllib.request
 import urllib.error
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 ET = pytz.timezone("America/New_York")
 
-_log_buffer: list[str] = []
-_discord_lines: list[str] = []
-_current_balance: float = 0.0
+# ── Internal state ─────────────────────────────────────────────────────────────
+
+_log_buffer:   list[str] = []
+_buy_lines:    list[str] = []
+_sell_lines:   list[str] = []
+_signal_lines: list[str] = []
+_skip_lines:   list[str] = []
+
+_current_balance:    float = 0.0
+_current_trade_size: float = 0.0
+_holdings:           dict  = {}   # {asset: volume}
+_watchlist_size:     int   = 0
+
+# Discord embed colors
+_BLUE   = 3447003   # #3498DB
+_GREEN  = 3066993   # #2ECC71
+_RED    = 15158332  # #E74C3C
+_YELLOW = 15844367  # #F1C40F
+_PURPLE = 10181046  # #9B59B6
 
 
 def _now() -> str:
@@ -45,6 +61,129 @@ def _write_obsidian(line: str):
 
     with open(note_path, "a", encoding="utf-8") as f:
         f.write(line + "\n")
+
+
+def _next_scan_str() -> str:
+    scan_hour   = int(os.getenv("SCAN_HOUR",   "9"))
+    scan_minute = int(os.getenv("SCAN_MINUTE", "35"))
+    now      = datetime.now(ET)
+    tomorrow = now.date() + timedelta(days=1)
+    return f"{tomorrow.strftime('%A, %b')} {tomorrow.day} at {scan_hour}:{str(scan_minute).zfill(2)} ET"
+
+
+def _send_discord():
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
+    if not webhook_url:
+        return
+
+    log_url = "https://github.com/xx-r0ger-xx-fintech/kraken-swing-bot/tree/main/storage/logs"
+    embeds  = []
+
+    # ── Embed 1: Account Snapshot (blue) ──────────────────────────────────────
+    max_pos = os.getenv("MAX_POSITIONS", "3")
+
+    holdings_lines = [
+        f"**{asset}**: {volume:.6f}" for asset, volume in _holdings.items()
+    ] if _holdings else ["No open positions"]
+
+    embeds.append({
+        "title": f"Kraken Swing Bot — {_today()}",
+        "color": _BLUE,
+        "fields": [
+            {
+                "name": "Account",
+                "value": (
+                    f"USD Balance: **${_current_balance:,.2f}** | "
+                    f"Trade size: **${_current_trade_size:,.2f}**"
+                ),
+                "inline": False,
+            },
+            {
+                "name": f"Holdings ({len(_holdings)}/{max_pos})",
+                "value": "\n".join(holdings_lines),
+                "inline": False,
+            },
+        ],
+    })
+
+    # ── Embed 2a: Buy Orders (green) ──────────────────────────────────────────
+    if _buy_lines:
+        embeds.append({
+            "title": "Buy Orders",
+            "color": _GREEN,
+            "fields": [{
+                "name": f"{len(_buy_lines)} order(s) executed",
+                "value": "\n".join(_buy_lines),
+                "inline": False,
+            }],
+        })
+
+    # ── Embed 2b: Sell Orders (red) ───────────────────────────────────────────
+    if _sell_lines:
+        embeds.append({
+            "title": "Sell Orders",
+            "color": _RED,
+            "fields": [{
+                "name": f"{len(_sell_lines)} order(s) executed",
+                "value": "\n".join(_sell_lines),
+                "inline": False,
+            }],
+        })
+
+    # ── Embed 3: Signals Evaluated (yellow) ───────────────────────────────────
+    if _signal_lines:
+        embeds.append({
+            "title": "Signals Evaluated",
+            "color": _YELLOW,
+            "fields": [{
+                "name": f"{len(_signal_lines)} asset(s) reached strategy",
+                "value": "\n".join(_signal_lines),
+                "inline": False,
+            }],
+        })
+
+    # ── Embed 4: Pre-filter Skips (purple) ────────────────────────────────────
+    if _skip_lines:
+        embeds.append({
+            "title": "Pre-filter Skips",
+            "color": _PURPLE,
+            "fields": [{
+                "name": f"{len(_skip_lines)} asset(s) filtered before strategy",
+                "value": "\n".join(_skip_lines),
+                "inline": False,
+            }],
+        })
+
+    # ── Embed 5: Summary (blue) — always present ──────────────────────────────
+    trades_placed = len(_buy_lines) + len(_sell_lines)
+    summary_value = "\n".join([
+        f"Assets scanned: **{_watchlist_size}**",
+        f"Trades placed: **{trades_placed}**",
+        f"Signals evaluated: **{len(_signal_lines)}**",
+        f"Pre-filtered: **{len(_skip_lines)}**",
+    ])
+
+    embeds.append({
+        "title": "Scan Summary",
+        "color": _BLUE,
+        "fields": [
+            {"name": "Results",   "value": summary_value,    "inline": False},
+            {"name": "Next Scan", "value": _next_scan_str(), "inline": False},
+        ],
+        "footer": {"text": f"Full log: {log_url}"},
+    })
+
+    try:
+        req = urllib.request.Request(
+            webhook_url,
+            data=json.dumps({"embeds": embeds}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req):
+            log("Discord notification sent")
+    except urllib.error.HTTPError as e:
+        log(f"Discord notify failed: {e.read().decode()}")
 
 
 def _push_to_github():
@@ -90,53 +229,20 @@ def _push_to_github():
         log(f"GitHub push failed: {e.read().decode()}")
 
 
-def _send_discord():
-    webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
-    if not webhook_url or not _discord_lines:
-        return
-
-    log_url = "https://github.com/xx-r0ger-xx-fintech/kraken-swing-bot/tree/main/storage/logs"
-
-    body = {
-        "embeds": [
-            {
-                "title": f"Kraken Swing Bot — {_today()}",
-                "color": 5793266,  # purple
-                "fields": [
-                    {
-                        "name": f"USD Balance: ${_current_balance:.2f}",
-                        "value": "\n".join(_discord_lines) or "No activity.",
-                    }
-                ],
-                "footer": {"text": f"Full log: {log_url}"},
-            }
-        ]
-    }
-
-    try:
-        req = urllib.request.Request(
-            webhook_url,
-            data=json.dumps(body).encode(),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req):
-            log("Discord notification sent")
-    except urllib.error.HTTPError as e:
-        log(f"Discord notify failed: {e.read().decode()}")
-
-
 # ── Public logging helpers ─────────────────────────────────────────────────────
 
-def log_scan_start(balance: float, trade_size: float, holdings: int):
-    global _current_balance
-    _current_balance = balance
+def log_scan_start(balance: float, trade_size: float, holdings: dict, watchlist_size: int):
+    global _current_balance, _current_trade_size, _holdings, _watchlist_size
+    _current_balance    = balance
+    _current_trade_size = trade_size
+    _holdings           = dict(holdings)
+    _watchlist_size     = watchlist_size
 
     msg = (
         f"Scan started | "
         f"USD Balance: ${balance:.2f} | "
         f"Trade size: ${trade_size:.2f} | "
-        f"Active holdings: {holdings}/{os.getenv('MAX_POSITIONS', '3')}"
+        f"Active holdings: {len(holdings)}/{os.getenv('MAX_POSITIONS', '3')}"
     )
     log(msg)
     _write_obsidian(f"\n## Scan — {_now()}\n**{msg}**\n")
@@ -150,18 +256,22 @@ def log_decision(symbol: str, signal, reason: str, price: float):
     log(msg)
     _write_obsidian(f"- {msg}")
     _buffer(f"- {msg}")
-    _discord_lines.append(msg)
+    _signal_lines.append(msg)
 
 
 def log_order(symbol: str, action: str, price: float, volume: float, sl: float):
     msg = (
         f"ORDER {action} {volume:.6f} {symbol} @ ${price:.2f} | "
-        f"SL: ${sl:.2f} (-{(1-(sl/price))*100:.1f}%)"
+        f"SL: ${sl:.2f} (-{(1-(sl/price))*100:.1f}%)" if sl else
+        f"ORDER {action} {volume:.6f} {symbol} @ ${price:.2f}"
     )
     log(msg)
     _write_obsidian(f"  - **{msg}**")
     _buffer(f"  - **{msg}**")
-    _discord_lines.append(f"  -> {msg}")
+    if action == "BUY":
+        _buy_lines.append(msg)
+    else:
+        _sell_lines.append(msg)
 
 
 def log_skipped(symbol: str, reason: str):
@@ -169,6 +279,7 @@ def log_skipped(symbol: str, reason: str):
     log(msg)
     _write_obsidian(f"- {msg}")
     _buffer(f"- {msg}")
+    _skip_lines.append(msg)
 
 
 def log_error(msg: str):
@@ -184,4 +295,7 @@ def log_scan_end():
     _push_to_github()
     _send_discord()
     _log_buffer.clear()
-    _discord_lines.clear()
+    _buy_lines.clear()
+    _sell_lines.clear()
+    _signal_lines.clear()
+    _skip_lines.clear()

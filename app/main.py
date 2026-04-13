@@ -28,8 +28,8 @@ STRATEGY_CONFIG = {
 def is_scan_window() -> bool:
     """Returns True during the daily 25-minute scan window."""
     now          = datetime.datetime.now(ET)
-    window_open  = now.replace(hour=config.SCAN_HOUR,  minute=config.SCAN_MINUTE, second=0, microsecond=0)
-    window_close = now.replace(hour=config.SCAN_HOUR,  minute=config.SCAN_MINUTE + 25, second=0, microsecond=0)
+    window_open  = now.replace(hour=config.SCAN_HOUR, minute=config.SCAN_MINUTE, second=0, microsecond=0)
+    window_close = window_open + datetime.timedelta(minutes=25)
     return window_open <= now <= window_close
 
 
@@ -42,7 +42,7 @@ def run_scan(api):
     holdings    = exchange.get_holdings(api, config.WATCHLIST)
     trade_size  = min(usd_balance * config.TRADE_SIZE_PCT, config.MAX_TRADE_SIZE)
 
-    logger.log_scan_start(usd_balance, trade_size, len(holdings))
+    logger.log_scan_start(usd_balance, trade_size, holdings, len(config.WATCHLIST))
 
     for asset in config.WATCHLIST:
         pair = config.PAIR_MAP.get(asset)
