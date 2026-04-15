@@ -36,7 +36,8 @@ RSI_PERIOD         = int(os.getenv("RSI_PERIOD",           "14"))
 RSI_BUY_THRESHOLD  = float(os.getenv("RSI_BUY_THRESHOLD",  "55"))
 RSI_SELL_THRESHOLD = float(os.getenv("RSI_SELL_THRESHOLD", "45"))
 
-BARS_TO_FETCH = int(os.getenv("BARS_TO_FETCH", "90"))
+# 120 calendar days ≈ 84 trading days — comfortable headroom above EMA_LONG default of 50
+BARS_TO_FETCH = int(os.getenv("BARS_TO_FETCH", "120"))
 
 # Scan time — crypto is 24/7 so we pick a consistent daily time
 SCAN_HOUR   = int(os.getenv("SCAN_HOUR",   "9"))
