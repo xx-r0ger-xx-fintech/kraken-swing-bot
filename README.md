@@ -22,7 +22,7 @@ Every day at **9:35 AM ET**, the bot:
 |---|---|---|
 | **EMA crossover** | 20 / 50 | Short EMA > Long EMA (0.5% tolerance) |
 | **RSI** | 14 | RSI > 55 |
-| **VWAP** | Rolling 90-day | Price > VWAP |
+| **VWAP** | Rolling 20-day | Price > VWAP |
 
 **Exit:** SELL signal fires when all three flip bearish. A stop-loss order is attached to every buy as a safety net.
 
