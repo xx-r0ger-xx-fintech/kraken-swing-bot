@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 import requests
 import pandas as pd
 import krakenex
@@ -17,39 +18,33 @@ def get_client() -> krakenex.API:
 
 # ── Account ────────────────────────────────────────────────────────────────────
 
-def get_usd_balance(api: krakenex.API) -> float:
-    """Return available USD balance. Tries ZUSD then USD."""
+def get_account_state(api: krakenex.API, watchlist: list) -> tuple[float, dict]:
+    """
+    Fetch balance once and return (usd_balance, holdings) in a single API call.
+    Avoids the double Balance call that get_usd_balance + get_holdings would make.
+    """
     resp = api.query_private("Balance")
     if resp.get("error"):
         raise Exception(f"Kraken Balance error: {resp['error']}")
 
     bal = resp["result"]
-    for key in ["ZUSD", "USD"]:
+
+    # USD balance — Kraken uses ZUSD internally; USDC is common for funded accounts
+    usd_balance = 0.0
+    for key in ["ZUSD", "USD", "USDC"]:
         if key in bal:
-            return float(bal[key])
-    return 0.0
+            usd_balance = float(bal[key])
+            break
 
-
-def get_holdings(api: krakenex.API, watchlist: list) -> dict:
-    """
-    Returns a dict of {base_asset: quantity} for any watchlist asset
-    with a non-trivial balance (> 0.0001).
-    """
-    resp = api.query_private("Balance")
-    if resp.get("error"):
-        raise Exception(f"Kraken Balance error: {resp['error']}")
-
-    bal      = resp["result"]
+    # Holdings — Kraken uses X prefix for some assets (XBT → XXBT, ETH → XETH)
     holdings = {}
-
     for asset in watchlist:
-        # Kraken uses X prefix for some assets (XBT, XETH)
         for key in [asset, f"X{asset}", asset.replace("XBT", "XXBT")]:
             if key in bal and float(bal[key]) > 0.0001:
                 holdings[asset] = float(bal[key])
                 break
 
-    return holdings
+    return usd_balance, holdings
 
 
 # ── Market data ────────────────────────────────────────────────────────────────
@@ -65,9 +60,11 @@ def get_ohlcv(pair: str, bars: int = 90) -> pd.DataFrame | None:
     try:
         resp = requests.get(url, params=params, timeout=10).json()
     except Exception as e:
+        logging.warning(f"get_ohlcv({pair}): {e}")
         return None
 
     if resp.get("error"):
+        logging.warning(f"get_ohlcv({pair}) Kraken error: {resp['error']}")
         return None
 
     result_key = [k for k in resp["result"] if k != "last"]

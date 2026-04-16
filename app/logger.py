@@ -280,11 +280,13 @@ def log_decision(symbol: str, signal, reason: str, price: float):
 
 
 def log_order(symbol: str, action: str, price: float, volume: float, sl: float):
-    msg = (
-        f"ORDER {action} {volume:.6f} {symbol} @ ${price:.2f} | "
-        f"SL: ${sl:.2f} (-{(1-(sl/price))*100:.1f}%)" if sl else
-        f"ORDER {action} {volume:.6f} {symbol} @ ${price:.2f}"
-    )
+    if sl:
+        msg = (
+            f"ORDER {action} {volume:.6f} {symbol} @ ${price:.2f} | "
+            f"SL: ${sl:.2f} (-{(1-(sl/price))*100:.1f}%)"
+        )
+    else:
+        msg = f"ORDER {action} {volume:.6f} {symbol} @ ${price:.2f}"
     log(msg)
     _write_obsidian(f"  - **{msg}**")
     _buffer(f"  - **{msg}**")

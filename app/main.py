@@ -39,8 +39,7 @@ def run_scan(api):
     logger.log("=== Kraken Swing Bot — daily scan ===")
 
     try:
-        usd_balance = exchange.get_usd_balance(api)
-        holdings    = exchange.get_holdings(api, config.WATCHLIST)
+        usd_balance, holdings = exchange.get_account_state(api, config.WATCHLIST)
         trade_size  = min(usd_balance * config.TRADE_SIZE_PCT, config.MAX_TRADE_SIZE)
 
         logger.log_scan_start(usd_balance, trade_size, holdings, len(config.WATCHLIST))
