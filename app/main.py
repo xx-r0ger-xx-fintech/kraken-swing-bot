@@ -63,7 +63,11 @@ def run_scan(api):
 
                 # ── SELL: exit if we hold this asset and trend reversed ──
                 if signal == "SELL" and asset in holdings:
-                    volume = holdings[asset]
+                    volume          = holdings[asset]
+                    position_value  = volume * price
+                    if position_value < config.MIN_TRADE_USD:
+                        logger.log_skipped(asset, f"Dust position (${position_value:.2f}) — skipping sell")
+                        continue
                     exchange.place_sell(api, pair, volume)
                     logger.log_order(asset, "SELL", price, volume, sl=0)
                     del holdings[asset]
@@ -73,6 +77,9 @@ def run_scan(api):
                 elif signal == "BUY" and asset not in holdings:
                     if len(holdings) >= config.MAX_POSITIONS:
                         logger.log_skipped(asset, "Max positions reached")
+                        continue
+                    if trade_size < config.MIN_TRADE_USD:
+                        logger.log_skipped(asset, f"Trade size ${trade_size:.2f} below minimum ${config.MIN_TRADE_USD:.2f}")
                         continue
                     if usd_balance < trade_size:
                         logger.log_skipped(asset, f"Insufficient balance (${usd_balance:.2f})")

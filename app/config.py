@@ -23,6 +23,7 @@ PAIR_MAP = {
 TRADE_SIZE_PCT = float(os.getenv("TRADE_SIZE_PCT", "0.20"))   # 20% of USD balance
 MAX_TRADE_SIZE = float(os.getenv("MAX_TRADE_SIZE", "500"))     # hard cap per trade
 MAX_POSITIONS  = int(os.getenv("MAX_POSITIONS", "3"))
+MIN_TRADE_USD  = float(os.getenv("MIN_TRADE_USD", "10"))       # Kraken minimum order floor
 
 # Risk management
 STOP_LOSS_PCT = float(os.getenv("STOP_LOSS_PCT", "0.04"))     # 4% stop loss

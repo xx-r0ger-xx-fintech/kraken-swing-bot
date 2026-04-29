@@ -29,12 +29,8 @@ def get_account_state(api: krakenex.API, watchlist: list) -> tuple[float, dict]:
 
     bal = resp["result"]
 
-    # USD balance — Kraken uses ZUSD internally; USDC is common for funded accounts
-    usd_balance = 0.0
-    for key in ["ZUSD", "USD", "USDC"]:
-        if key in bal:
-            usd_balance = float(bal[key])
-            break
+    # Sum all USD-equivalent stablecoin balances — accounts may hold any combination
+    usd_balance = sum(float(bal.get(key, 0)) for key in ["ZUSD", "USD", "USDC", "USDT", "USDG"])
 
     # Holdings — Kraken uses X prefix for some assets (XBT → XXBT, ETH → XETH)
     holdings = {}
@@ -114,7 +110,10 @@ def place_buy(api: krakenex.API, pair: str, volume: float, stop_price: float):
 
     resp = api.query_private("AddOrder", params)
     if resp.get("error"):
-        raise Exception(f"Buy order error: {resp['error']}")
+        errors = resp["error"]
+        if any("volume minimum not met" in e for e in errors):
+            raise ValueError(f"Volume minimum not met for buy on {pair} — increase trade size")
+        raise Exception(f"Buy order error: {errors}")
     return resp["result"]
 
 
@@ -129,5 +128,8 @@ def place_sell(api: krakenex.API, pair: str, volume: float):
 
     resp = api.query_private("AddOrder", params)
     if resp.get("error"):
-        raise Exception(f"Sell order error: {resp['error']}")
+        errors = resp["error"]
+        if any("volume minimum not met" in e for e in errors):
+            raise ValueError(f"Volume minimum not met for sell on {pair} — dust position")
+        raise Exception(f"Sell order error: {errors}")
     return resp["result"]
